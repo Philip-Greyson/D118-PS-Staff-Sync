@@ -159,7 +159,7 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con: # create the connect
 
                                 # check to see if the user is enabled in Google, if not add that to the update body
                                 if currentlySuspended == True:
-                                    bodyDict.update({'suspended', 'False'})
+                                    bodyDict.update({'suspended': 'False'})
                                 
                                 # if the email from PowerSchool is not the same as the email of the profile that containst their DCID
                                 if userToUpdateEmail != email:
