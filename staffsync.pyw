@@ -159,7 +159,7 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con: # create the connect
 
                                 # check to see if the user is enabled in Google, if not add that to the update body
                                 if currentlySuspended == True:
-                                    bodyDict.update({'suspended': 'False'})
+                                    bodyDict.update({'suspended': False})
                                 
                                 # if the email from PowerSchool is not the same as the email of the profile that containst their DCID
                                 if userToUpdateEmail != email:
@@ -265,7 +265,7 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con: # create the connect
                                 if userToUpdate.get('users')[0].get('suspended') != True: # check to see if they have been previously suspended, if not we need to do it
                                     print(f'ACTION: Suspending DCID {uDCID} with {email}')
                                     print(f'ACTION: Suspending DCID {uDCID} with {email}', file=log)
-                                    bodyDict.update({'suspended' : 'True'}) # add the suspended: True to the body of the update patch
+                                    bodyDict.update({'suspended' : True}) # add the suspended: True to the body of the update patch
                                 if userToUpdate.get('users')[0].get('orgUnitPath') != suspended_OU: # check to see if they are in the proper OU for suspended users
                                     print(f'ACTION: Moving DCID {uDCID} with {email} to suspended OU {suspended_OU}')
                                     print(f'ACTION: Moving DCID {uDCID} with {email} to suspended OU {suspended_OU}', file=log)
