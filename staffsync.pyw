@@ -88,7 +88,9 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con: # create the connect
                 print('--------------------------------------------------------------------',file=log) # debug
 
                 # get the overall user info (non-school specific) for all users in the current school, filtering to only those who have an email filled in to avoid "fake" accounts like test/temp staff
-                cur.execute('SELECT dcid, email_addr, first_name, last_name, teachernumber, groupvalue, canchangeschool FROM users WHERE email_addr IS NOT NULL AND homeschoolid = ' + str(schoolNum) + ' ORDER BY dcid DESC')
+                cur.execute('SELECT users.dcid, users.email_addr, users.first_name, users.last_name, users.teachernumber, users.groupvalue, users.canchangeschool, u_humanresources.cellphone\
+                    FROM users LEFT JOIN u_humanresources ON users.dcid = u_humanresources.usersdcid\
+                        WHERE users.email_addr IS NOT NULL AND users.homeschoolid = ' + str(schoolNum) + ' ORDER BY users.dcid DESC')
                 users = cur.fetchall()
                 for user in users:
                     try: # put each user in their own try block so we can skip them if they have an error
@@ -102,7 +104,7 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con: # create the connect
                         teacherNum = str(user[4])
                         securityGroup = str(user[5])
                         homeschool = str(schoolNum)
-                        cellphone = ' ' # reset cellphone to blank on each user, will be overwritten if present in PS
+                        cellphone = str(user[7]) if user[7] else '' # set cell phone to blank string if not present in PS
                         if firstName in badnames or lastName in badnames: # check their first and last names against the list of test/dummy accounts
                             raise badNameException('Found name that matches list of bad names') # raise an exception for them if they have a bad name, which skips the rest of processing
 
@@ -113,12 +115,7 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con: # create the connect
                         # print(str(user) + str(schoolAccess)) # debug
 
                         # next do a query for their schoolstaff entries that are active, they have one per building they have teacher access in with different info
-                        cur.execute('SELECT schoolstaff.schoolid, schoolstaff.status, schoolstaff.staffstatus, u_def_ext_schoolstaff.hr_cellphone \
-                                    FROM schoolstaff\
-                                    LEFT JOIN u_def_ext_schoolstaff\
-                                    ON schoolstaff.dcid = u_def_ext_schoolstaff.schoolstaffdcid \
-                                    WHERE schoolstaff.users_dcid = ' + uDCID + ' AND schoolstaff.status = 1\
-                                    ORDER BY schoolstaff.schoolid')
+                        cur.execute('SELECT schoolid, status, staffstatus FROM schoolstaff WHERE users_dcid = ' + uDCID + ' AND status = 1 ORDER BY schoolid')
                         schoolStaff = cur.fetchall()
                         # The first block of this if handles staff who should have active account
                         if schoolStaff: # if they have results from above their google account should be active
@@ -131,7 +128,6 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con: # create the connect
                                     schoolAccess.append(str(schoolCode))
                                 if schoolCode == schoolNum: # if the current school entry is their homeschool
                                     staffType = str(schoolEntry[2]) # get the staff type. 0 = Not Assigned, 1 = Teacher, 2 = Staff, 3 = Lunch Staff, 4 = Substitute
-                                    cellphone = str(schoolEntry[3]) if schoolEntry[3] else ' ' # get their cellphone from the custom field or just a blank if its null
 
                             # set the building field for CrisisGO to count certain buildings as the WHS group
                             if homeschool == '0' or homeschool == '131' or homeschool == '133' or homeschool == '134' or homeschool == '135':
