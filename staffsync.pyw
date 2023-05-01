@@ -79,11 +79,11 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con: # create the connect
                 schoolName = school[0].title() # convert to title case since some are all caps
                 schoolNum = school[1]
                 # construct the string for the organization unit in Google Admin from the building name + staff
-                orgUnit = '/D118 Staff/' + schoolName + ' Staff'
+                buildingOrgUnit = '/D118 Staff/' + schoolName + ' Staff'
                 if schoolName == 'Substitute': # check and see if our building is the substitute building since they have a different OU then the rest of staff
-                    orgUnit = substitute_OU
-                print(f'Starting Building: {schoolName} | {schoolNum} | {orgUnit}') # debug
-                print(f'Starting Building: {schoolName} | {schoolNum} | {orgUnit}',file=log) # debug
+                     buildingOrgUnit = substitute_OU
+                print(f'Starting Building: {schoolName} | {schoolNum} | {buildingOrgUnit}') # debug
+                print(f'Starting Building: {schoolName} | {schoolNum} | {buildingOrgUnit}',file=log) # debug
                 print('--------------------------------------------------------------------') # debug
                 print('--------------------------------------------------------------------',file=log) # debug
 
@@ -94,6 +94,7 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con: # create the connect
                 users = cur.fetchall()
                 for user in users:
                     try: # put each user in their own try block so we can skip them if they have an error
+                        targetOrgUnit = buildingOrgUnit # set the target OU back to the building default
                         enabled = False # set their enabled flag to be false by default, will be set to true later if they have an active school
                         schoolAccess = [] # create empty list for which schools they have access to
                         # store the info in variables for better readability so its obvious what we pass later on
@@ -128,6 +129,11 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con: # create the connect
                                     schoolAccess.append(str(schoolCode))
                                 if schoolCode == schoolNum: # if the current school entry is their homeschool
                                     staffType = str(schoolEntry[2]) # get the staff type. 0 = Not Assigned, 1 = Teacher, 2 = Staff, 3 = Lunch Staff, 4 = Substitute
+                                    # print(f'DEBUG: {firstName} {lastName} Staff type: {staffType}')
+                                    if staffType == "4": # if they have a staff type of sub, we want to override their target OU to put them in the sub OU even if they are a long term sub in a building
+                                        # print(f'---------------DEBUG: {firstName} {lastName} Should be in the SUB OU--------------')
+                                        # print(f'---------------DEBUG: {firstName} {lastName} Should be in the SUB OU--------------',file=log)
+                                        targetOrgUnit = substitute_OU
 
                             # set the building field for CrisisGO to count certain buildings as the WHS group
                             if homeschool == '0' or homeschool == '131' or homeschool == '133' or homeschool == '134' or homeschool == '135':
@@ -165,17 +171,17 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con: # create the connect
                                     bodyDict.update({'name' : {'givenName' : firstName, 'familyName' : lastName}}) # add the name change to the body of the update
                                 
                                 # Check to see if they are in the correct OU (which is based on home building assignment)
-                                if currentOU != orgUnit:
+                                if currentOU != targetOrgUnit:
                                     for org in frozenOrgs: # go through our list of "frozen" OU paths which contain a few users with custom settings, licenses, etc
                                         if org in currentOU: # check and see if the frozen OU path is part of the OU they are currently in, if so set the frozen flag to True
                                             frozen = True
                                     if frozen: # if they are in a frozen OU we do not add the change, but just print out an info line for logging
-                                        print(f'INFO: User {email} is in the frozen OU {currentOU} and will not be moved to {orgUnit}')
-                                        print(f'INFO: User {email} is in the frozen OU {currentOU} and will not be moved to {orgUnit}', file=log)
-                                    else: # if theyre not in a frozen OU they will have the orgunit change added to the body of the update
-                                        print(f'ACTION: User {email} not in a frozen OU, will to be moved from {currentOU} to {orgUnit}')
-                                        print(f'ACTION: User {email} not in a frozen OU, will to be moved from {currentOU} to {orgUnit}', file=log)
-                                        bodyDict.update({'orgUnitPath' : orgUnit}) # add OU to body of the update
+                                        print(f'INFO: User {email} is in the frozen OU {currentOU} and will not be moved to {targetOrgUnit}')
+                                        print(f'INFO: User {email} is in the frozen OU {currentOU} and will not be moved to {targetOrgUnit}', file=log)
+                                    else: # if theyre not in a frozen OU they will have the targetOrgUnit change added to the body of the update
+                                        print(f'ACTION: User {email} not in a frozen OU, will to be moved from {currentOU} to {targetOrgUnit}')
+                                        print(f'ACTION: User {email} not in a frozen OU, will to be moved from {currentOU} to {targetOrgUnit}', file=log)
+                                        bodyDict.update({'orgUnitPath' : targetOrgUnit}) # add OU to body of the update
 
 
                                 # get custom attributes info from their google profile
@@ -236,7 +242,7 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con: # create the connect
                                 try:
                                     # define the new user email, name, and all the basic fields
                                     newUser = {'primaryEmail' : email, 'name' : {'givenName' : firstName, 'familyName' : lastName}, 'password' : newPass, 'changePasswordAtNextLogin' : True,
-                                            'orgUnitPath' : orgUnit, 'externalIds' : [{'value' : teacherNum, 'type' : 'organization'}],
+                                            'orgUnitPath' : targetOrgUnit, 'externalIds' : [{'value' : teacherNum, 'type' : 'organization'}],
                                             'customSchemas' : {
                                                 'Synchronization_Data' : {'DCID': int(uDCID), 'Homeschool_ID' : homeschool, 'School_Access_List' : schoolAccessString, 'Staff_Type' : int(staffType), 'Staff_Group' : int(securityGroup)},
                                                 'CrisisGO' : {'CellPhone' : cellphone, 'Building' : building}}}
