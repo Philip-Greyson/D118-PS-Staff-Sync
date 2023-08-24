@@ -34,7 +34,7 @@ substitute_OU = '/Substitute Teachers'
 frozenOrgs = ['/Administrators', '/Mail Merge Users', '/Parallels Desktop Users', '/Utility Accounts']
 # List of names that some of the dummy/old accounts use so we can ignore them
 # badnames = ['USE', 'Training1','Trianing2','Trianing3','Trianing4','Planning','Admin','NURSE','USER', 'USE ', 'TEST', 'TESTTT', 'DO NOT', 'DO', 'NOT', 'TBD', 'LUNCH']
-badnames = ['Use', 'Training1','Trianing2','Trianing3','Trianing4','Planning','Admin','Nurse','User', 'Use ', 'Test', 'Testtt', 'Do Not', 'Do', 'Not', 'Tbd', 'Lunch']
+badnames = ['Use', 'Training1','Trianing2','Trianing3','Trianing4','Planning','Admin','Nurse','User', 'Use ', 'Test', 'Testtt', 'Do Not', 'Do', 'Not', 'Tbd', 'Lunch', 'New', 'Teacher', 'New Teacher', 'Teacher-1']
 
 # Google API Scopes that will be used. If modifying these scopes, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/admin.directory.user', 'https://www.googleapis.com/auth/admin.directory.group', 'https://www.googleapis.com/auth/admin.directory.group.member', 'https://www.googleapis.com/auth/admin.directory.orgunit', 'https://www.googleapis.com/auth/admin.directory.userschema']
