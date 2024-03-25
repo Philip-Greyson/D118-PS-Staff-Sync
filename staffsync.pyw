@@ -27,17 +27,26 @@ DB_PW = os.environ.get('POWERSCHOOL_DB_PASSWORD')  # the password for the databa
 DB_CS = os.environ.get('POWERSCHOOL_PROD_DB')  # the IP address, port, and database name to connect to
 print(f"Database Username: {DB_UN} |Password: {DB_PW} |Server: {DB_CS}")  # debug so we can see where oracle is trying to connect to/with
 
-# the password to use for new staff accounts
-newPass = os.environ.get('NEW_USER_PASSWORD')
- # the string location of where suspended accounts should end up, change if this is different
-suspended_OU = '/Suspended Accounts'
-# string location of where where substitute accounts should end up
-substitute_OU = '/Substitute Teachers'
-# Define a list of sub-OUs in GAdmin where users should not be moved out of. Used for special permissions, apps, licenses, etc
-frozenOrgs = ['/Administrators', '/Mail Merge Users', '/Parallels Desktop Users', '/Utility Accounts']
-# List of names that some of the dummy/old accounts use so we can ignore them
-# badnames = ['USE', 'Training1','Trianing2','Trianing3','Trianing4','Planning','Admin','NURSE','USER', 'USE ', 'TEST', 'TESTTT', 'DO NOT', 'DO', 'NOT', 'TBD', 'LUNCH']
-badnames = ['Use', 'Training1','Trianing2','Trianing3','Trianing4','Planning','Admin','Nurse','User', 'Use ', 'Test', 'Testtt', 'Do Not', 'Do', 'Not', 'Tbd', 'Lunch', 'New', 'Teacher', 'New Teacher', 'Teacher-1']
+
+NEW_PASSWORD = os.environ.get('NEW_USER_PASSWORD')  # the password to use for new staff accounts
+SUSPENDED_OU = '/Suspended Accounts'  # the string location of where suspended accounts should end up, change if this is different
+SUBSTITUTE_OU = '/Substitute Teachers'  # string location of where where substitute accounts should end up
+FROZEN_OUS = ['/Administrators', '/Mail Merge Users', '/Parallels Desktop Users', '/Utility Accounts']  # Define a list of sub-OUs in GAdmin where users should not be moved out of. Used for special permissions, apps, licenses, etc
+BAD_NAMES = ['Use', 'Training1','Trianing2','Trianing3','Trianing4','Planning','Admin','Nurse','User', 'Use ', 'Test', 'Testtt', 'Do Not', 'Do', 'Not', 'Tbd', 'Lunch', 'New', 'Teacher', 'New Teacher', 'Teacher-1']  # List of names that some of the dummy/old accounts use so we can ignore them
+
+# At least one custom attribute is needed to match the powerschool DCID to google account. The custom attribute category and field name are listed below
+CUSTOM_ATTRIBUTE_SYNC_CATEGORY = 'Synchronization_Data'  # the category name that the custom attributes will be in
+CUSTOM_ATTRIBUTE_DCID = 'DCID'  # field name for the dcid custom attribute in the sync category
+
+# I also use other custom attributes for a number of things including which schools they should have access to which is used for email groups, staff types and security groups, etc
+USE_EXTRA_CUSTOM_ATTRIBUTES = True  # boolean flag for whether we are using all the custom attributes listed below
+CUSTOM_ATTRIBUTE_SCHOOL = 'Homeschool_ID'  # the field name for the homeschool id custom attribute in the sync category
+CUSTOM_ATTRIBUTE_ACCESS_LIST = 'School_Access_List'  # field name for the school access list custom attribute in the sync category
+CUSTOM_ATTRIBUTE_TYPE = 'Staff_Type'  # field name for the staff type custom attribute in the sync category
+CUSTOM_ATTRIBUTE_GROUP = 'Staff_Group'  # field name for the staff group custom attribute in the sync category
+CUSTOM_ATTRIBUTE_CRISISGO_CATEGORY = 'CrisisGO'  # category name for the crisisGo custom attributes
+CUSTOM_ATTRIBUTE_CELL = 'CellPhone'  # field name for the crisisGo cellphone custom attribute
+CUSTOM_ATTRIBUTE_BUILDING = 'Building'  # field name for the crisisGo building custom attribute
 
 # Google API Scopes that will be used. If modifying these scopes, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/admin.directory.user', 'https://www.googleapis.com/auth/admin.directory.group', 'https://www.googleapis.com/auth/admin.directory.group.member', 'https://www.googleapis.com/auth/admin.directory.orgunit', 'https://www.googleapis.com/auth/admin.directory.userschema']
@@ -85,7 +94,7 @@ with oracledb.connect(user=DB_UN, password=DB_PW, dsn=DB_CS) as con:  # create t
                 # construct the string for the organization unit in Google Admin from the building name + staff
                 buildingOrgUnit = '/D118 Staff/' + schoolName + ' Staff'
                 if schoolName == 'Substitute':  # check and see if our building is the substitute building since they have a different OU then the rest of staff
-                     buildingOrgUnit = substitute_OU
+                     buildingOrgUnit = SUBSTITUTE_OU
                 print(f'Starting Building: {schoolName} | {schoolNum} | {buildingOrgUnit}')  # debug
                 print(f'Starting Building: {schoolName} | {schoolNum} | {buildingOrgUnit}',file=log)  # debug
                 print('--------------------------------------------------------------------')  # debug
@@ -110,7 +119,7 @@ with oracledb.connect(user=DB_UN, password=DB_PW, dsn=DB_CS) as con:  # create t
                         securityGroup = str(user[5])
                         homeschool = str(schoolNum)
                         cellphone = str(user[7]) if user[7] else ''  # set cell phone to blank string if not present in PS
-                        if firstName in badnames or lastName in badnames:  # check their first and last names against the list of test/dummy accounts
+                        if firstName in BAD_NAMES or lastName in BAD_NAMES:  # check their first and last names against the list of test/dummy accounts
                             raise BadNameExceptionError('Found name that matches list of bad names')  # raise an exception for them if they have a bad name, which skips the rest of processing
 
                         ######## if we want to add their admin access buildings to their school access list uncomment next 3 lines
@@ -137,7 +146,7 @@ with oracledb.connect(user=DB_UN, password=DB_PW, dsn=DB_CS) as con:  # create t
                                     if staffType == "4":  # if they have a staff type of sub, we want to override their target OU to put them in the sub OU even if they are a long term sub in a building
                                         # print(f'---------------DEBUG: {firstName} {lastName} Should be in the SUB OU--------------')
                                         # print(f'---------------DEBUG: {firstName} {lastName} Should be in the SUB OU--------------',file=log)
-                                        targetOrgUnit = substitute_OU
+                                        targetOrgUnit = SUBSTITUTE_OU
 
                             # set the building field for CrisisGO to count certain buildings as the WHS group
                             if homeschool == '0' or homeschool == '131' or homeschool == '133' or homeschool == '134' or homeschool == '135':
@@ -152,7 +161,7 @@ with oracledb.connect(user=DB_UN, password=DB_PW, dsn=DB_CS) as con:  # create t
                             schoolAccessString = schoolAccessString[:-1]  # strip out the final character which is a semicolon
 
                             # next do a query for the user based on their DCID that should be stored in the Synchronization_Data.DCID custom attribute
-                            queryString = 'Synchronization_Data.DCID=' + uDCID  # construct the query string which looks for the custom Synchronization_Data custom attribute category and the DCID attribute in that category
+                            queryString = CUSTOM_ATTRIBUTE_SYNC_CATEGORY + '.' + CUSTOM_ATTRIBUTE_DCID + '=' + uDCID  # construct the query string which looks for the custom Synchronization_Data custom attribute category and the DCID attribute in that category
                             userToUpdate = service.users().list(customer='my_customer', domain='d118.org', maxResults=2, orderBy='email', projection='full', query=queryString).execute()  # return a list of at most 2 users who have that
                             if userToUpdate.get('users'):  # if we found a user in Google that matches the user DCID, they already exist and we just want to update any info
                                 frozen = False  # define a flag for whether they are in a frozen OU, set to false initially
@@ -161,79 +170,89 @@ with oracledb.connect(user=DB_UN, password=DB_PW, dsn=DB_CS) as con:  # create t
                                 userToUpdateEmail = userToUpdate.get('users')[0].get('primaryEmail').lower()  # get the primary email from the google account results just in case its different than what is in PS
                                 currentlySuspended = userToUpdate.get('users')[0].get('suspended')
                                 currentOU = userToUpdate.get('users')[0].get('orgUnitPath')
-                                print(f'User with DCID: {uDCID} already exists under email {userToUpdateEmail}, updating any info')
+                                print(f'DBUG: User with DCID: {uDCID} already exists under email {userToUpdateEmail}, updating any info')
+                                print(f'DBUG: User with DCID: {uDCID} already exists under email {userToUpdateEmail}, updating any info', file=log)
 
                                 # check to see if the user is enabled in Google, if not add that to the update body
                                 if currentlySuspended == True:
+                                    print(f'INFO: User {email} - DCID {uDCID} - is currently suspended and will be re-enabled')
+                                    print(f'INFO: User {email} - DCID {uDCID} - is currently suspended and will be re-enabled', file=log)
                                     bodyDict.update({'suspended': False})
 
                                 # if the email from PowerSchool is not the same as the email of the profile that containst their DCID
                                 if userToUpdateEmail != email:
-                                    print(f'ACTION: User {firstName} {lastName} - DCID {uDCID} - has had their email change from {userToUpdateEmail} to {email}, will update email and name')
-                                    print(f'ACTION: User {firstName} {lastName} - DCID {uDCID} - has had their email change from {userToUpdateEmail} to {email}, will update email and name', file=log)
+                                    print(f'INFO: User {firstName} {lastName} - DCID {uDCID} - has had their email change from {userToUpdateEmail} to {email}, will update email and name')
+                                    print(f'INFO: User {firstName} {lastName} - DCID {uDCID} - has had their email change from {userToUpdateEmail} to {email}, will update email and name', file=log)
                                     bodyDict.update({'primaryEmail' : email})  # add the primary email change to the body of the update
                                     bodyDict.update({'name' : {'givenName' : firstName, 'familyName' : lastName}})  # add the name change to the body of the update
 
                                 # Check to see if they are in the correct OU (which is based on home building assignment)
                                 if currentOU != targetOrgUnit:
-                                    for org in frozenOrgs:  # go through our list of "frozen" OU paths which contain a few users with custom settings, licenses, etc
+                                    for org in FROZEN_OUS:  # go through our list of "frozen" OU paths which contain a few users with custom settings, licenses, etc
                                         if org in currentOU:  # check and see if the frozen OU path is part of the OU they are currently in, if so set the frozen flag to True
                                             frozen = True
                                     if frozen:  # if they are in a frozen OU we do not add the change, but just print out an info line for logging
                                         print(f'INFO: User {email} is in the frozen OU {currentOU} and will not be moved to {targetOrgUnit}')
                                         print(f'INFO: User {email} is in the frozen OU {currentOU} and will not be moved to {targetOrgUnit}', file=log)
                                     else:  # if theyre not in a frozen OU they will have the targetOrgUnit change added to the body of the update
-                                        print(f'ACTION: User {email} not in a frozen OU, will to be moved from {currentOU} to {targetOrgUnit}')
-                                        print(f'ACTION: User {email} not in a frozen OU, will to be moved from {currentOU} to {targetOrgUnit}', file=log)
+                                        print(f'INFO: User {email} not in a frozen OU, will to be moved from {currentOU} to {targetOrgUnit}')
+                                        print(f'INFO: User {email} not in a frozen OU, will to be moved from {currentOU} to {targetOrgUnit}', file=log)
                                         bodyDict.update({'orgUnitPath' : targetOrgUnit})  # add OU to body of the update
 
 
-                                # get custom attributes info from their google profile
-                                try:  # put the retrieval of the custom data in a try/except block because some accounts might not have the data, which will then need to be added
-                                    currentSchool = str(userToUpdate.get('users')[0].get('customSchemas').get('Synchronization_Data').get('Homeschool_ID'))  # take the first user's custom schema homeschool id and store it
-                                    currentSchoolAccess = str(userToUpdate.get('users')[0].get('customSchemas').get('Synchronization_Data').get('School_Access_List'))
-                                    currentStaffType = str(userToUpdate.get('users')[0].get('customSchemas').get('Synchronization_Data').get('Staff_Type'))
-                                    currentGroup = str(userToUpdate.get('users')[0].get('customSchemas').get('Synchronization_Data').get('Staff_Group'))
-                                    currentTeacherNumber = str(userToUpdate.get('users')[0].get('externalIds')[0].get('value'))  # get the built in employee ID number field from google
-                                    currentCell = str(userToUpdate.get('users')[0].get('customSchemas').get('CrisisGO').get('CellPhone'))  # get CrisisGO current cell #
-                                    currentBuilding = str(userToUpdate.get('users')[0].get('customSchemas').get('CrisisGO').get('Building'))  # get CrisisGO custom schema building name
-                                    # check and see if any of the custom attributes on the profile differ from what is in PS, if so just update all of them at the same time
-                                    if (currentSchool != homeschool) or (currentSchoolAccess != schoolAccessString) or (currentStaffType != staffType) or (currentGroup != securityGroup) or (currentTeacherNumber != teacherNum) or (currentCell != cellphone) or (currentBuilding != building):
-                                        print(f'ACTION: Updating {email}. Employee ID from {currentTeacherNumber} to {teacherNum}, homeschool ID from {currentSchool} to {homeschool}, school list from {currentSchoolAccess} to {schoolAccessString}, staff type from {currentStaffType} to {staffType}, security group from {currentGroup} to {securityGroup}, cell from {currentCell} to {cellphone}, building from {currentBuilding} to {building}')
-                                        print(f'ACTION: Updating {email}. Employee ID from {currentTeacherNumber} to {teacherNum}, homeschool ID from {currentSchool} to {homeschool}, school list from {currentSchoolAccess} to {schoolAccessString}, staff type from {currentStaffType} to {staffType}, security group from {currentGroup} to {securityGroup}, cell from {currentCell} to {cellphone}, building from {currentBuilding} to {building}', file=log)
-                                        bodyDict.update({'customSchemas' : {'Synchronization_Data' : {'Homeschool_ID' : homeschool, 'School_Access_List' : schoolAccessString, 'Staff_Type' : int(staffType), 'Staff_Group' : int(securityGroup)} ,
-                                                                             'CrisisGO' : {'CellPhone' : cellphone, 'Building' : building}}})  # add each custom attribute to the body of the update
+                                if USE_EXTRA_CUSTOM_ATTRIBUTES:  # get custom attributes info from their google profile if true
+                                    try:  # put the retrieval of the custom data in a try/except block because some accounts might not have the data, which will then need to be added
+                                        currentSchool = str(userToUpdate.get('users')[0].get('customSchemas').get(CUSTOM_ATTRIBUTE_SYNC_CATEGORY).get(CUSTOM_ATTRIBUTE_SCHOOL))  # take the first user's custom schema homeschool id and store it
+                                        currentSchoolAccess = str(userToUpdate.get('users')[0].get('customSchemas').get(CUSTOM_ATTRIBUTE_SYNC_CATEGORY).get(CUSTOM_ATTRIBUTE_ACCESS_LIST))
+                                        currentStaffType = str(userToUpdate.get('users')[0].get('customSchemas').get(CUSTOM_ATTRIBUTE_SYNC_CATEGORY).get(CUSTOM_ATTRIBUTE_TYPE))
+                                        currentGroup = str(userToUpdate.get('users')[0].get('customSchemas').get(CUSTOM_ATTRIBUTE_SYNC_CATEGORY).get(CUSTOM_ATTRIBUTE_GROUP))
+                                        currentTeacherNumber = str(userToUpdate.get('users')[0].get('externalIds')[0].get('value'))  # get the built in employee ID number field from google
+                                        currentCell = str(userToUpdate.get('users')[0].get('customSchemas').get(CUSTOM_ATTRIBUTE_CRISISGO_CATEGORY).get(CUSTOM_ATTRIBUTE_CELL))  # get CrisisGO current cell #
+                                        currentBuilding = str(userToUpdate.get('users')[0].get('customSchemas').get(CUSTOM_ATTRIBUTE_CRISISGO_CATEGORY).get(CUSTOM_ATTRIBUTE_BUILDING))  # get CrisisGO custom schema building name
+                                        # check and see if any of the custom attributes on the profile differ from what is in PS, if so just update all of them at the same time
+                                        if (currentSchool != homeschool) or (currentSchoolAccess != schoolAccessString) or (currentStaffType != staffType) or (currentGroup != securityGroup) or (currentTeacherNumber != teacherNum) or (currentCell != cellphone) or (currentBuilding != building):
+                                            print(f'INFO: Updating {email}. Employee ID from {currentTeacherNumber} to {teacherNum}, homeschool ID from {currentSchool} to {homeschool}, school list from {currentSchoolAccess} to {schoolAccessString}, staff type from {currentStaffType} to {staffType}, security group from {currentGroup} to {securityGroup}, cell from {currentCell} to {cellphone}, building from {currentBuilding} to {building}')
+                                            print(f'INFO: Updating {email}. Employee ID from {currentTeacherNumber} to {teacherNum}, homeschool ID from {currentSchool} to {homeschool}, school list from {currentSchoolAccess} to {schoolAccessString}, staff type from {currentStaffType} to {staffType}, security group from {currentGroup} to {securityGroup}, cell from {currentCell} to {cellphone}, building from {currentBuilding} to {building}', file=log)
+                                            bodyDict.update({'customSchemas' : {CUSTOM_ATTRIBUTE_SYNC_CATEGORY : {CUSTOM_ATTRIBUTE_SCHOOL : homeschool, CUSTOM_ATTRIBUTE_ACCESS_LIST : schoolAccessString, CUSTOM_ATTRIBUTE_TYPE : int(staffType), CUSTOM_ATTRIBUTE_GROUP : int(securityGroup)} ,
+                                                                                CUSTOM_ATTRIBUTE_CRISISGO_CATEGORY : {CUSTOM_ATTRIBUTE_CELL : cellphone, CUSTOM_ATTRIBUTE_BUILDING : building}}})  # add each custom attribute to the body of the update
+                                            bodyDict.update({'externalIds' : [{'value' : teacherNum, 'type' : 'organization'}]})  # add the teacher number / employeeID field to the body of the update
+
+                                            #### Following is just debug logging to ensure I know why changes are being made
+                                            if (currentSchool != homeschool):
+                                                print(f'DBUG: Homeschool ID mismatch for {email}')
+                                                print(f'DBUG: Homeschool ID mismatch for {email}', file=log)
+                                            if (currentSchoolAccess != schoolAccessString):
+                                                print(f'DBUG: School Access List mismatch for {email}')
+                                                print(f'DBUG: School Access List mismatch for {email}', file=log)
+                                            if (currentStaffType != staffType):
+                                                print(f'DBUG: Staff Type mismatch for {email}')
+                                                print(f'DBUG: Staff Type mismatch for {email}', file=log)
+                                            if (currentGroup != securityGroup):
+                                                print(f'DBUG:Security Group mismatch for {email}')
+                                                print(f'DBUG:Security Group mismatch for {email}', file=log)
+                                            if (currentTeacherNumber != teacherNum):
+                                                print(f'DBUG: Employee Number mismatch for {email}')
+                                                print(f'DBUG: Employee Number mismatch for {email}', file=log)
+                                            if (currentCell != cellphone):
+                                                print(f'DBUG: Cell mismatch for {email}')
+                                                print(f'DBUG: Cell mismatch for {email}', file=log)
+                                            if (currentBuilding != building):
+                                                print(f'DBUG: Building mismatch for {email}')
+                                                print(f'DBUG: Building mismatch for {email}', file=log)
+
+                                    except Exception as er:
+                                        print(f'ERROR: User {email} had no or was missing Synchronization_Data, it will be created: ({er})')
+                                        print(f'ERROR: User {email} had no or was missing Synchronization_Data, it will be created: ({er})', file=log)
+                                        print(f'INFO: Updating {email} to employee ID {teacherNum}, homeschool ID {homeschool}, school list {schoolAccessString}, staff type {staffType}, security group {securityGroup}, cell {cellphone}, building {building}')
+                                        print(f'INFO: Updating {email} to employee ID {teacherNum}, homeschool ID {homeschool}, school list {schoolAccessString}, staff type {staffType}, security group {securityGroup}, cell {cellphone}, building {building}', file=log)
+                                        bodyDict.update({'customSchemas' : {CUSTOM_ATTRIBUTE_SYNC_CATEGORY : {CUSTOM_ATTRIBUTE_SCHOOL : homeschool, CUSTOM_ATTRIBUTE_ACCESS_LIST : schoolAccessString, CUSTOM_ATTRIBUTE_TYPE : int(staffType), CUSTOM_ATTRIBUTE_GROUP : int(securityGroup)} ,
+                                                                            CUSTOM_ATTRIBUTE_CRISISGO_CATEGORY : {CUSTOM_ATTRIBUTE_CELL : cellphone, CUSTOM_ATTRIBUTE_BUILDING : building}}})  # add each custom attribute to the body of the update
                                         bodyDict.update({'externalIds' : [{'value' : teacherNum, 'type' : 'organization'}]})  # add the teacher number / employeeID field to the body of the update
-
-                                        #### Following is just debug logging to ensure I know why changes are being made
-                                        if (currentSchool != homeschool):
-                                            print(f'\t Homeschool ID mismatch for {email}', file=log)
-                                        if (currentSchoolAccess != schoolAccessString):
-                                            print(f'\t School Access List mismatch for {email}', file=log)
-                                        if (currentStaffType != staffType):
-                                            print(f'\t Staff Type mismatch for {email}', file=log)
-                                        if (currentGroup != securityGroup):
-                                            print(f'\t Security Group mismatch for {email}', file=log)
-                                        if (currentTeacherNumber != teacherNum):
-                                            print(f'\t Employee Number mismatch for {email}', file=log)
-                                        if (currentCell != cellphone):
-                                            print(f'\t Cell mismatch for {email}', file=log)
-                                        if (currentBuilding != building):
-                                            print(f'\t Building mismatch for {email}', file=log)
-
-                                except Exception as er:
-                                    print(f'ERROR: User {email} had no or was missing Synchronization_Data, it will be created: ({er})')
-                                    print(f'ERROR: User {email} had no or was missing Synchronization_Data, it will be created: ({er})', file=log)
-                                    print(f'ACTION: Updating {email} to employee ID {teacherNum}, homeschool ID {homeschool}, school list {schoolAccessString}, staff type {staffType}, security group {securityGroup}, cell {cellphone}, building {building}')
-                                    print(f'ACTION: Updating {email} to employee ID {teacherNum}, homeschool ID {homeschool}, school list {schoolAccessString}, staff type {staffType}, security group {securityGroup}, cell {cellphone}, building {building}', file=log)
-                                    bodyDict.update({'customSchemas' : {'Synchronization_Data' : {'Homeschool_ID' : homeschool, 'School_Access_List' : schoolAccessString, 'Staff_Type' : int(staffType), 'Staff_Group' : int(securityGroup)} ,
-                                                                        'CrisisGO' : {'CellPhone' : cellphone, 'Building' : building}}})  # add each custom attribute to the body of the update
-                                    bodyDict.update({'externalIds' : [{'value' : teacherNum, 'type' : 'organization'}]})  # add the teacher number / employeeID field to the body of the update
 
                                 # Finally, do the actual update of the user profile, using the bodyDict we have constructed in the above sections
                                 if bodyDict:  # if there is anything in the body dict we want to update. if its empty we skip the update
                                     try:
-                                        print(bodyDict)  # debug
+                                        print(f'DBUG: {bodyDict}')  # debug
                                         # print(bodyDict, file=log) # debug
                                         outcome = service.users().update(userKey = userToUpdateEmail, body=bodyDict).execute()  # does the actual updating of the user profile
                                     except Exception as er:
@@ -241,15 +260,21 @@ with oracledb.connect(user=DB_UN, password=DB_PW, dsn=DB_CS) as con:  # create t
                                         print(f'ERROR: cannot update {user} : {er}', file=log)
 
                             else:  # there is no result for our DCID query, should try to create a new email account
-                                print(f'ACTION: User with DCID: {uDCID} does not exist, will need to create them with email: {email}')
-                                print(f'ACTION: User with DCID: {uDCID} does not exist, will need to create them with email: {email}', file=log)
+                                print(f'INFO: User with DCID: {uDCID} does not exist, will need to create them with email: {email}')
+                                print(f'INFO: User with DCID: {uDCID} does not exist, will need to create them with email: {email}', file=log)
                                 try:
-                                    # define the new user email, name, and all the basic fields
-                                    newUser = {'primaryEmail' : email, 'name' : {'givenName' : firstName, 'familyName' : lastName}, 'password' : newPass, 'changePasswordAtNextLogin' : True,
-                                            'orgUnitPath' : targetOrgUnit, 'externalIds' : [{'value' : teacherNum, 'type' : 'organization'}],
-                                            'customSchemas' : {
-                                                'Synchronization_Data' : {'DCID': int(uDCID), 'Homeschool_ID' : homeschool, 'School_Access_List' : schoolAccessString, 'Staff_Type' : int(staffType), 'Staff_Group' : int(securityGroup)},
-                                                'CrisisGO' : {'CellPhone' : cellphone, 'Building' : building}}}
+                                    if USE_EXTRA_CUSTOM_ATTRIBUTES:
+                                        # define the new user email, name, and all the basic fields as well as all custom attributes
+                                        newUser = {'primaryEmail' : email, 'name' : {'givenName' : firstName, 'familyName' : lastName}, 'password' : NEW_PASSWORD, 'changePasswordAtNextLogin' : True,
+                                                'orgUnitPath' : targetOrgUnit, 'externalIds' : [{'value' : teacherNum, 'type' : 'organization'}],
+                                                'customSchemas' : {
+                                                    CUSTOM_ATTRIBUTE_SYNC_CATEGORY : {'DCID': int(uDCID), CUSTOM_ATTRIBUTE_SCHOOL : homeschool, CUSTOM_ATTRIBUTE_ACCESS_LIST : schoolAccessString, CUSTOM_ATTRIBUTE_TYPE : int(staffType), CUSTOM_ATTRIBUTE_GROUP : int(securityGroup)},
+                                                    CUSTOM_ATTRIBUTE_CRISISGO_CATEGORY : {CUSTOM_ATTRIBUTE_CELL : cellphone, CUSTOM_ATTRIBUTE_BUILDING : building}}}
+                                    else:
+                                        # define the new user email, name, and all the basic fields and only the sync dcid custom attribute
+                                        newUser = {'primaryEmail' : email, 'name' : {'givenName' : firstName, 'familyName' : lastName}, 'password' : NEW_PASSWORD, 'changePasswordAtNextLogin' : True,
+                                                'orgUnitPath' : targetOrgUnit, 'externalIds' : [{'value' : teacherNum, 'type' : 'organization'}],
+                                                'customSchemas' : {CUSTOM_ATTRIBUTE_SYNC_CATEGORY : {'DCID': int(uDCID)}}}
                                     outcome = service.users().insert(body=newUser).execute()  # does the actual account creation
                                 except Exception as er:
                                     print(f'ERROR on user account creation for {email}: {er}')
@@ -258,7 +283,7 @@ with oracledb.connect(user=DB_UN, password=DB_PW, dsn=DB_CS) as con:  # create t
 
                         # This else block handles staff who should be inactive/suspended
                         else:
-                            print(f'User {email} has no active schools, will be suspended')
+                            print(f'DBUG: User {email} has no active schools and should be suspended')
                             queryString = 'Synchronization_Data.DCID=' + uDCID  # construct the query string which looks for the custom Synchronization_Data custom attribute category and the DCID attribute in that category
                             userToUpdate = service.users().list(customer='my_customer', domain='d118.org', maxResults=2, orderBy='email', projection='full', query=queryString).execute()  # return a list of at most 2 users who have that DCID
                             # print(queryResults) # debug
@@ -266,16 +291,15 @@ with oracledb.connect(user=DB_UN, password=DB_PW, dsn=DB_CS) as con:  # create t
                                 bodyDict = {}  # empty dict that will hold the update parameters
                                 userToUpdateEmail = userToUpdate.get('users')[0].get('primaryEmail')  # get the primary email from the google account results just in case its different than what is in PS
                                 # print(userToUpdateEmail) # debug
-                                # userToUpdate = service.users().get(userKey=userToUpdateEmail).execute() # return the google account for that email
                                 # print(userToUpdate) # debug
                                 if userToUpdate.get('users')[0].get('suspended') != True:  # check to see if they have been previously suspended, if not we need to do it
-                                    print(f'ACTION: Suspending DCID {uDCID} with {email}')
-                                    print(f'ACTION: Suspending DCID {uDCID} with {email}', file=log)
+                                    print(f'INFO: Suspending DCID {uDCID} with {email}')
+                                    print(f'INFO: Suspending DCID {uDCID} with {email}', file=log)
                                     bodyDict.update({'suspended' : True})  # add the suspended: True to the body of the update patch
-                                if userToUpdate.get('users')[0].get('orgUnitPath') != suspended_OU:  # check to see if they are in the proper OU for suspended users
-                                    print(f'ACTION: Moving DCID {uDCID} with {email} to suspended OU {suspended_OU}')
-                                    print(f'ACTION: Moving DCID {uDCID} with {email} to suspended OU {suspended_OU}', file=log)
-                                    bodyDict.update({'orgUnitPath' : suspended_OU})  # add the suspended OU to the org unit path for the update patch
+                                if userToUpdate.get('users')[0].get('orgUnitPath') != SUSPENDED_OU:  # check to see if they are in the proper OU for suspended users
+                                    print(f'INFO: Moving DCID {uDCID} with {email} to suspended OU {SUSPENDED_OU}')
+                                    print(f'INFO: Moving DCID {uDCID} with {email} to suspended OU {SUSPENDED_OU}', file=log)
+                                    bodyDict.update({'orgUnitPath' : SUSPENDED_OU})  # add the suspended OU to the org unit path for the update patch
 
                                 # finally do the update (suspend and move) if we have anything in the bodyDict
                                 if bodyDict:
@@ -289,17 +313,17 @@ with oracledb.connect(user=DB_UN, password=DB_PW, dsn=DB_CS) as con:  # create t
                                         for group in userGroups:
                                             name = group.get('name')
                                             groupEmail = group.get('email')
-                                            print(f'{email} was a member of: {name} - {groupEmail}, they will be removed from the group')
-                                            print(f'{email} was a member of: {name} - {groupEmail}, they will be removed from the group',file=log)
+                                            print(f'INFO: {email} was a member of: {name} - {groupEmail}, they will be removed from the group')
+                                            print(f'INFO: {email} was a member of: {name} - {groupEmail}, they will be removed from the group',file=log)
                                             service.members().delete(groupKey=groupEmail, memberKey=email).execute()
                                     else:
-                                        print(f'Newly suspended account {email} was not in any groups, no removal needed')
-                                        print(f'Newly suspended account {email} was not in any groups, no removal needed', file=log)
+                                        print(f'DBUG: Newly suspended account {email} was not in any groups, no removal needed')
+                                        print(f'DBUG: Newly suspended account {email} was not in any groups, no removal needed', file=log)
                                 else:
-                                    print(f'\t{email} is already suspended in the suspended accounts OU, no update needed')
+                                    print(f'DBUG: {email} is already suspended in the suspended accounts OU, no update needed')
                             else:
-                                print(f'WARNING: Found inactive user DCID {uDCID} without Google account that matches. Should be {email}')
-                                print(f'WARNING: Found inactive user DCID {uDCID} without Google account that matches. Should be {email}', file=log)
+                                print(f'WARN: Found inactive user DCID {uDCID} without Google account that matches. Should be {email}')
+                                print(f'WARN: Found inactive user DCID {uDCID} without Google account that matches. Should be {email}', file=log)
                     except BadNameExceptionError:
                         print(f'INFO: found user matching name in bad names list {email} - {firstName} {lastName}')
                         print(f'INFO: found user matching name in bad names list {email} - {firstName} {lastName}', file=log)
