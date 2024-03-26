@@ -29,11 +29,17 @@ print(f"Database Username: {DB_UN} |Password: {DB_PW} |Server: {DB_CS}")  # debu
 
 
 NEW_PASSWORD = os.environ.get('NEW_USER_PASSWORD')  # the password to use for new staff accounts
+OU_PREFIX = '/D118 Staff/'  # the umbrella OU that all staff members are inside of except suspended or subs
+BUILDING_OU_SUFFIX = ' Staff'  # the suffix after the building name for staff OUs
 SUSPENDED_OU = '/Suspended Accounts'  # the string location of where suspended accounts should end up, change if this is different
 SUBSTITUTE_OU = '/Substitute Teachers'  # string location of where where substitute accounts should end up
+SUB_BUILDING_NAME = 'Substitute'  # name of the substitute building in PowerSchool
 FROZEN_OUS = ['/Administrators', '/Mail Merge Users', '/Parallels Desktop Users', '/Utility Accounts']  # Define a list of sub-OUs in GAdmin where users should not be moved out of. Used for special permissions, apps, licenses, etc
 BAD_NAMES = ['Use', 'Training1','Trianing2','Trianing3','Trianing4','Planning','Admin','Nurse','User', 'Use ', 'Test', 'Testtt', 'Do Not', 'Do', 'Not', 'Tbd', 'Lunch', 'New', 'Teacher', 'New Teacher', 'Teacher-1']  # List of names that some of the dummy/old accounts use so we can ignore them
 
+REMOVE_SUSPENDED_FROM_GROUPS = True  # boolean flag to control whether newly suspended accounts should be removed from all email groups when they get suspended
+
+GOOGLE_DOMAIN = 'd118.org'  # domain for google admin user searches
 # At least one custom attribute is needed to match the powerschool DCID to google account. The custom attribute category and field name are listed below
 CUSTOM_ATTRIBUTE_SYNC_CATEGORY = 'Synchronization_Data'  # the category name that the custom attributes will be in
 CUSTOM_ATTRIBUTE_DCID = 'DCID'  # field name for the dcid custom attribute in the sync category
@@ -92,18 +98,16 @@ with oracledb.connect(user=DB_UN, password=DB_PW, dsn=DB_CS) as con:  # create t
                 schoolName = school[0].title()  # convert to title case since some are all caps
                 schoolNum = school[1]
                 # construct the string for the organization unit in Google Admin from the building name + staff
-                buildingOrgUnit = '/D118 Staff/' + schoolName + ' Staff'
-                if schoolName == 'Substitute':  # check and see if our building is the substitute building since they have a different OU then the rest of staff
+                buildingOrgUnit = OU_PREFIX + schoolName + BUILDING_OU_SUFFIX
+                if schoolName == SUB_BUILDING_NAME:  # check and see if our building is the substitute building since they have a different OU then the rest of staff
                      buildingOrgUnit = SUBSTITUTE_OU
                 print(f'Starting Building: {schoolName} | {schoolNum} | {buildingOrgUnit}')  # debug
                 print(f'Starting Building: {schoolName} | {schoolNum} | {buildingOrgUnit}',file=log)  # debug
-                print('--------------------------------------------------------------------')  # debug
-                print('--------------------------------------------------------------------',file=log)  # debug
 
                 # get the overall user info (non-school specific) for all users in the current school, filtering to only those who have an email filled in to avoid "fake" accounts like test/temp staff
                 cur.execute('SELECT users.dcid, users.email_addr, users.first_name, users.last_name, users.teachernumber, users.groupvalue, users.canchangeschool, u_humanresources.cellphone\
                     FROM users LEFT JOIN u_humanresources ON users.dcid = u_humanresources.usersdcid\
-                        WHERE users.email_addr IS NOT NULL AND users.homeschoolid = ' + str(schoolNum) + ' ORDER BY users.dcid DESC')
+                        WHERE users.email_addr IS NOT NULL AND users.homeschoolid = :school ORDER BY users.dcid DESC', school=schoolNum)
                 users = cur.fetchall()
                 for user in users:
                     try:  # put each user in their own try block so we can skip them if they have an error
@@ -129,7 +133,7 @@ with oracledb.connect(user=DB_UN, password=DB_PW, dsn=DB_CS) as con:  # create t
                         # print(str(user) + str(schoolAccess)) # debug
 
                         # next do a query for their schoolstaff entries that are active, they have one per building they have teacher access in with different info
-                        cur.execute('SELECT schoolid, status, staffstatus FROM schoolstaff WHERE users_dcid = ' + uDCID + ' AND status = 1 ORDER BY schoolid')
+                        cur.execute('SELECT schoolid, status, staffstatus FROM schoolstaff WHERE users_dcid = :dcid AND status = 1 ORDER BY schoolid', dcid=uDCID)
                         schoolStaff = cur.fetchall()
                         # The first block of this if handles staff who should have active account
                         if schoolStaff:  # if they have results from above their google account should be active
@@ -148,11 +152,12 @@ with oracledb.connect(user=DB_UN, password=DB_PW, dsn=DB_CS) as con:  # create t
                                         # print(f'---------------DEBUG: {firstName} {lastName} Should be in the SUB OU--------------',file=log)
                                         targetOrgUnit = SUBSTITUTE_OU
 
-                            # set the building field for CrisisGO to count certain buildings as the WHS group
-                            if homeschool == '0' or homeschool == '131' or homeschool == '133' or homeschool == '134' or homeschool == '135':
-                                building = 'Wauconda High School'
-                            else:
-                                building = schoolName
+                            if USE_EXTRA_CUSTOM_ATTRIBUTES:
+                                # set the building field for CrisisGO to count certain buildings as the WHS group
+                                if homeschool == '0' or homeschool == '131' or homeschool == '133' or homeschool == '134' or homeschool == '135':
+                                    building = 'Wauconda High School'
+                                else:
+                                    building = schoolName
 
                             # convert school access list into string separated by semicolons
                             schoolAccessString = ''
@@ -162,7 +167,7 @@ with oracledb.connect(user=DB_UN, password=DB_PW, dsn=DB_CS) as con:  # create t
 
                             # next do a query for the user based on their DCID that should be stored in the Synchronization_Data.DCID custom attribute
                             queryString = CUSTOM_ATTRIBUTE_SYNC_CATEGORY + '.' + CUSTOM_ATTRIBUTE_DCID + '=' + uDCID  # construct the query string which looks for the custom Synchronization_Data custom attribute category and the DCID attribute in that category
-                            userToUpdate = service.users().list(customer='my_customer', domain='d118.org', maxResults=2, orderBy='email', projection='full', query=queryString).execute()  # return a list of at most 2 users who have that
+                            userToUpdate = service.users().list(customer='my_customer', domain=GOOGLE_DOMAIN, maxResults=2, orderBy='email', projection='full', query=queryString).execute()  # return a list of at most 2 users who have that
                             if userToUpdate.get('users'):  # if we found a user in Google that matches the user DCID, they already exist and we just want to update any info
                                 frozen = False  # define a flag for whether they are in a frozen OU, set to false initially
 
@@ -284,8 +289,8 @@ with oracledb.connect(user=DB_UN, password=DB_PW, dsn=DB_CS) as con:  # create t
                         # This else block handles staff who should be inactive/suspended
                         else:
                             print(f'DBUG: User {email} has no active schools and should be suspended')
-                            queryString = 'Synchronization_Data.DCID=' + uDCID  # construct the query string which looks for the custom Synchronization_Data custom attribute category and the DCID attribute in that category
-                            userToUpdate = service.users().list(customer='my_customer', domain='d118.org', maxResults=2, orderBy='email', projection='full', query=queryString).execute()  # return a list of at most 2 users who have that DCID
+                            queryString = CUSTOM_ATTRIBUTE_SYNC_CATEGORY + '.' + CUSTOM_ATTRIBUTE_DCID + '=' + uDCID  # construct the query string which looks for the custom Synchronization_Data custom attribute category and the DCID attribute in that category
+                            userToUpdate = service.users().list(customer='my_customer', domain=GOOGLE_DOMAIN, maxResults=2, orderBy='email', projection='full', query=queryString).execute()  # return a list of at most 2 users who have that DCID
                             # print(queryResults) # debug
                             if userToUpdate.get('users'):  # if we found a user in Google that matches the user DCID, we can suspend their account and move them to the suspended OU
                                 bodyDict = {}  # empty dict that will hold the update parameters
@@ -307,20 +312,20 @@ with oracledb.connect(user=DB_UN, password=DB_PW, dsn=DB_CS) as con:  # create t
                                     # print(bodyDict, file=log)
                                     outcome = service.users().update(userKey = userToUpdateEmail, body=bodyDict).execute()  # does the actual updating of the user profile
 
-                                    # Remove the newly suspended user from any groups they were a member of
-                                    userGroups = service.groups().list(userKey=userToUpdateEmail).execute().get('groups')
-                                    if userGroups:
-                                        for group in userGroups:
-                                            name = group.get('name')
-                                            groupEmail = group.get('email')
-                                            print(f'INFO: {email} was a member of: {name} - {groupEmail}, they will be removed from the group')
-                                            print(f'INFO: {email} was a member of: {name} - {groupEmail}, they will be removed from the group',file=log)
-                                            service.members().delete(groupKey=groupEmail, memberKey=email).execute()
-                                    else:
-                                        print(f'DBUG: Newly suspended account {email} was not in any groups, no removal needed')
-                                        print(f'DBUG: Newly suspended account {email} was not in any groups, no removal needed', file=log)
+                                    if REMOVE_SUSPENDED_FROM_GROUPS:  # Remove the newly suspended user from any groups they were a member of
+                                        userGroups = service.groups().list(userKey=userToUpdateEmail).execute().get('groups')
+                                        if userGroups:
+                                            for group in userGroups:
+                                                name = group.get('name')
+                                                groupEmail = group.get('email')
+                                                print(f'INFO: {email} was a member of: {name} - {groupEmail}, they will be removed from the group')
+                                                print(f'INFO: {email} was a member of: {name} - {groupEmail}, they will be removed from the group',file=log)
+                                                service.members().delete(groupKey=groupEmail, memberKey=email).execute()
+                                        else:
+                                            print(f'DBUG: Newly suspended account {email} was not in any groups, no removal needed')
+                                            print(f'DBUG: Newly suspended account {email} was not in any groups, no removal needed', file=log)
                                 else:
-                                    print(f'DBUG: {email} is already suspended in the suspended accounts OU, no update needed')
+                                    print(f'DBUG: {email} is already suspended and in the suspended accounts OU, no update needed')
                             else:
                                 print(f'WARN: Found inactive user DCID {uDCID} without Google account that matches. Should be {email}')
                                 print(f'WARN: Found inactive user DCID {uDCID} without Google account that matches. Should be {email}', file=log)
