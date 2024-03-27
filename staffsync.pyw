@@ -35,7 +35,7 @@ SUSPENDED_OU = '/Suspended Accounts'  # the string location of where suspended a
 SUBSTITUTE_OU = '/Substitute Teachers'  # string location of where where substitute accounts should end up
 SUB_BUILDING_NAME = 'Substitute'  # name of the substitute building in PowerSchool
 FROZEN_OUS = ['/Administrators', '/Mail Merge Users', '/Parallels Desktop Users', '/Utility Accounts']  # Define a list of sub-OUs in GAdmin where users should not be moved out of. Used for special permissions, apps, licenses, etc
-BAD_NAMES = ['Use', 'Training1','Trianing2','Trianing3','Trianing4','Planning','Admin','Nurse','User', 'Use ', 'Test', 'Testtt', 'Do Not', 'Do', 'Not', 'Tbd', 'Lunch', 'New', 'Teacher', 'New Teacher', 'Teacher-1']  # List of names that some of the dummy/old accounts use so we can ignore them
+BAD_NAMES = ['use', 'training1','trianing2','trianing3','trianing4','planning','admin','nurse','user', 'use ', 'test', 'testtt', 'do not', 'do', 'not', 'tbd', 'lunch', 'new', 'teacher', 'new teacher', 'teacher-1']  # List of names that some of the dummy/old accounts use so we can ignore them
 
 REMOVE_SUSPENDED_FROM_GROUPS = True  # boolean flag to control whether newly suspended accounts should be removed from all email groups when they get suspended
 
@@ -123,7 +123,7 @@ with oracledb.connect(user=DB_UN, password=DB_PW, dsn=DB_CS) as con:  # create t
                         securityGroup = str(user[5])
                         homeschool = str(schoolNum)
                         cellphone = str(user[7]) if user[7] else ''  # set cell phone to blank string if not present in PS
-                        if firstName in BAD_NAMES or lastName in BAD_NAMES:  # check their first and last names against the list of test/dummy accounts
+                        if firstName.lower() in BAD_NAMES or lastName.lower() in BAD_NAMES:  # check their first and last names against the list of test/dummy accounts
                             raise BadNameExceptionError('Found name that matches list of bad names')  # raise an exception for them if they have a bad name, which skips the rest of processing
 
                         ######## if we want to add their admin access buildings to their school access list uncomment next 3 lines
