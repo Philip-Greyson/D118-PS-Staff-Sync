@@ -38,6 +38,7 @@ FROZEN_OUS = ['/Administrators', '/Mail Merge Users', '/Parallels Desktop Users'
 BAD_NAMES = ['use', 'training1','trianing2','trianing3','trianing4','planning','admin','nurse','user', 'use ', 'test', 'testtt', 'do not', 'do', 'not', 'tbd', 'lunch', 'new', 'teacher', 'new teacher', 'teacher-1']  # List of names that some of the dummy/old accounts use so we can ignore them
 
 REMOVE_SUSPENDED_FROM_GROUPS = True  # boolean flag to control whether newly suspended accounts should be removed from all email groups when they get suspended
+SKIP_NUMERIC_EMAILS = True  # boolean flag to control whether all numeric emails should be skipped
 
 GOOGLE_DOMAIN = 'd118.org'  # domain for google admin user searches
 # At least one custom attribute is needed to match the powerschool DCID to google account. The custom attribute category and field name are listed below
@@ -80,6 +81,11 @@ service = build('admin', 'directory_v1', credentials=creds)
 
 class BadNameExceptionError(Exception):
     """Just a custom exception class for use with logging."""
+
+    pass
+
+class NumericEmailExceptionError(Exception):
+    """Custom exception class for numeric emails, for use with logging."""
 
     pass
 
@@ -129,6 +135,9 @@ if __name__ == '__main__':  # main file execution
                             cellphone = str(user[7]) if user[7] else ''  # set cell phone to blank string if not present in PS
                             if firstName.lower() in BAD_NAMES or lastName.lower() in BAD_NAMES:  # check their first and last names against the list of test/dummy accounts
                                 raise BadNameExceptionError('Found name that matches list of bad names')  # raise an exception for them if they have a bad name, which skips the rest of processing
+                            if SKIP_NUMERIC_EMAILS:
+                                if email.split('@')[0].isnumeric():  # if the part of the email before the domain is all numeric, it is probably a student worker which we want to skip as they will already exist
+                                    raise NumericEmailExceptionError('Found email which is all numbers, skipping them')  # raise an exception for them, which skips the rest of their processing
 
                             ######## if we want to add their admin access buildings to their school access list uncomment next 3 lines
                             # if user[6]: # if they have a CLOB returned for thir can change schools field, we want to conver that to a list
@@ -334,8 +343,11 @@ if __name__ == '__main__':  # main file execution
                                     print(f'WARN: Found inactive user DCID {uDCID} without Google account that matches. Should be {email}')
                                     print(f'WARN: Found inactive user DCID {uDCID} without Google account that matches. Should be {email}', file=log)
                         except BadNameExceptionError:
-                            print(f'INFO: found user matching name in bad names list {email} - {firstName} {lastName}')
-                            print(f'INFO: found user matching name in bad names list {email} - {firstName} {lastName}', file=log)
+                            print(f'INFO: Found user matching name in bad names list {email} - {firstName} {lastName}')
+                            print(f'INFO: Found user matching name in bad names list {email} - {firstName} {lastName}', file=log)
+                        except NumericEmailExceptionError:
+                            print(f'WARN: Found user with an all numeric email. DCID: {uDCID} - {firstName} {lastName} - {email}')
+                            print(f'WARN: Found user with an all numeric email. DCID: {uDCID} - {firstName} {lastName} - {email}', file=log)
                         except Exception as er:
                             print(f'ERROR on {user[1]}: {er}')
                             print(f'ERROR on {user[1]}: {er}', file=log)
