@@ -35,7 +35,7 @@ SUSPENDED_OU = '/Suspended Accounts'  # the string location of where suspended a
 SUBSTITUTE_OU = '/Substitute Teachers'  # string location of where where substitute accounts should end up
 SUB_BUILDING_NAME = 'Substitute'  # name of the substitute building in PowerSchool
 FROZEN_OUS = ['/Administrators', '/Mail Merge Users', '/Parallels Desktop Users', '/Utility Accounts']  # Define a list of sub-OUs in GAdmin where users should not be moved out of. Used for special permissions, apps, licenses, etc
-BAD_NAMES = ['use', 'training1','trianing2','trianing3','trianing4','planning','admin','nurse','user', 'use ', 'test', 'testtt', 'do not', 'do', 'not', 'tbd', 'lunch', 'new', 'teacher', 'new teacher', 'teacher-1']  # List of names that some of the dummy/old accounts use so we can ignore them
+BAD_NAMES = ['use', 'training1','trianing2','trianing3','trianing4','planning','admin','nurse','user','use ','test','testtt','do not','do','not','tbd','lunch','new','teacher','new teacher','teacher-1','sub','substitute','plugin','mba','tech','technology','administrator']  # List of names that some of the dummy/old accounts use so we can ignore them
 
 REMOVE_SUSPENDED_FROM_GROUPS = True  # boolean flag to control whether newly suspended accounts should be removed from all email groups when they get suspended
 SKIP_NUMERIC_EMAILS = True  # boolean flag to control whether all numeric emails should be skipped
@@ -44,6 +44,7 @@ GOOGLE_DOMAIN = 'd118.org'  # domain for google admin user searches
 # At least one custom attribute is needed to match the powerschool DCID to google account. The custom attribute category and field name are listed below
 CUSTOM_ATTRIBUTE_SYNC_CATEGORY = 'Synchronization_Data'  # the category name that the custom attributes will be in
 CUSTOM_ATTRIBUTE_DCID = 'DCID'  # field name for the dcid custom attribute in the sync category
+CUSTOM_ATTRIBUTE_ID = 'Teacher-Number'  # field name for the ID# / Teacher # custom attribute in the sync category
 
 # I also use other custom attributes for a number of things including which schools they should have access to which is used for email groups, staff types and security groups, etc
 USE_EXTRA_CUSTOM_ATTRIBUTES = True  # boolean flag for whether we are using all the custom attributes listed below
@@ -225,13 +226,14 @@ if __name__ == '__main__':  # main file execution
                                             currentStaffType = str(userToUpdate.get('users')[0].get('customSchemas').get(CUSTOM_ATTRIBUTE_SYNC_CATEGORY).get(CUSTOM_ATTRIBUTE_TYPE))
                                             currentGroup = str(userToUpdate.get('users')[0].get('customSchemas').get(CUSTOM_ATTRIBUTE_SYNC_CATEGORY).get(CUSTOM_ATTRIBUTE_GROUP))
                                             currentTeacherNumber = str(userToUpdate.get('users')[0].get('externalIds')[0].get('value'))  # get the built in employee ID number field from google
+                                            currentCustomTeacherNumber = str(userToUpdate.get('users')[0].get('customSchemas').get(CUSTOM_ATTRIBUTE_SYNC_CATEGORY).get(CUSTOM_ATTRIBUTE_ID))  # get the custom ID number field
                                             currentCell = str(userToUpdate.get('users')[0].get('customSchemas').get(CUSTOM_ATTRIBUTE_CRISISGO_CATEGORY).get(CUSTOM_ATTRIBUTE_CELL))  # get CrisisGO current cell #
                                             currentBuilding = str(userToUpdate.get('users')[0].get('customSchemas').get(CUSTOM_ATTRIBUTE_CRISISGO_CATEGORY).get(CUSTOM_ATTRIBUTE_BUILDING))  # get CrisisGO custom schema building name
                                             # check and see if any of the custom attributes on the profile differ from what is in PS, if so just update all of them at the same time
-                                            if (currentSchool != homeschool) or (currentSchoolAccess != schoolAccessString) or (currentStaffType != staffType) or (currentGroup != securityGroup) or (currentTeacherNumber != teacherNum) or (currentCell != cellphone) or (currentBuilding != building):
+                                            if (currentSchool != homeschool) or (currentSchoolAccess != schoolAccessString) or (currentStaffType != staffType) or (currentGroup != securityGroup) or (currentTeacherNumber != teacherNum) or (currentCustomTeacherNumber != teacherNum) or (currentCell != cellphone) or (currentBuilding != building):
                                                 print(f'INFO: Updating {email}. Employee ID from {currentTeacherNumber} to {teacherNum}, homeschool ID from {currentSchool} to {homeschool}, school list from {currentSchoolAccess} to {schoolAccessString}, staff type from {currentStaffType} to {staffType}, security group from {currentGroup} to {securityGroup}, cell from {currentCell} to {cellphone}, building from {currentBuilding} to {building}')
                                                 print(f'INFO: Updating {email}. Employee ID from {currentTeacherNumber} to {teacherNum}, homeschool ID from {currentSchool} to {homeschool}, school list from {currentSchoolAccess} to {schoolAccessString}, staff type from {currentStaffType} to {staffType}, security group from {currentGroup} to {securityGroup}, cell from {currentCell} to {cellphone}, building from {currentBuilding} to {building}', file=log)
-                                                bodyDict.update({'customSchemas' : {CUSTOM_ATTRIBUTE_SYNC_CATEGORY : {CUSTOM_ATTRIBUTE_SCHOOL : homeschool, CUSTOM_ATTRIBUTE_ACCESS_LIST : schoolAccessString, CUSTOM_ATTRIBUTE_TYPE : int(staffType), CUSTOM_ATTRIBUTE_GROUP : int(securityGroup)} ,
+                                                bodyDict.update({'customSchemas' : {CUSTOM_ATTRIBUTE_SYNC_CATEGORY : {CUSTOM_ATTRIBUTE_SCHOOL : homeschool, CUSTOM_ATTRIBUTE_ACCESS_LIST : schoolAccessString, CUSTOM_ATTRIBUTE_TYPE : int(staffType), CUSTOM_ATTRIBUTE_GROUP : int(securityGroup), CUSTOM_ATTRIBUTE_ID: int(teacherNum)} ,
                                                                                     CUSTOM_ATTRIBUTE_CRISISGO_CATEGORY : {CUSTOM_ATTRIBUTE_CELL : cellphone, CUSTOM_ATTRIBUTE_BUILDING : building}}})  # add each custom attribute to the body of the update
                                                 bodyDict.update({'externalIds' : [{'value' : teacherNum, 'type' : 'organization'}]})  # add the teacher number / employeeID field to the body of the update
 
@@ -248,7 +250,7 @@ if __name__ == '__main__':  # main file execution
                                                 if (currentGroup != securityGroup):
                                                     print(f'DBUG:Security Group mismatch for {email}')
                                                     print(f'DBUG:Security Group mismatch for {email}', file=log)
-                                                if (currentTeacherNumber != teacherNum):
+                                                if (currentTeacherNumber != teacherNum) or (currentCustomTeacherNumber != teacherNum):
                                                     print(f'DBUG: Employee Number mismatch for {email}')
                                                     print(f'DBUG: Employee Number mismatch for {email}', file=log)
                                                 if (currentCell != cellphone):
