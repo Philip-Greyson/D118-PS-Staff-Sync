@@ -351,8 +351,14 @@ if __name__ == '__main__':  # main file execution
                             print(f'WARN: Found user with an all numeric email. DCID: {uDCID} - {firstName} {lastName} - {email}')
                             print(f'WARN: Found user with an all numeric email. DCID: {uDCID} - {firstName} {lastName} - {email}', file=log)
                         except Exception as er:
-                            print(f'ERROR on {user[1]}: {er}')
-                            print(f'ERROR on {user[1]}: {er}', file=log)
+                            if "Details:" in er:  # if the error is coming from the Google API it will have specific info including the "Details" section
+                                er = er.split("Details: ")[1]  # split the error message by the http code and details
+                                er = er.strip("\"[]>")  # strip out the extra ", [], and > that will still be left over. Should result in a dict with a message, domain, and reason
+                                print(f'ERROR from Google API while processing {user[1]}: {er["message"]}, reason {er["reason"]}')
+                                print(f'ERROR from Google API while processing {user[1]}: {er["message"]}, reason {er["reason"]}', file=log)
+                            else:
+                                print(f'ERROR while processing {user[1]}: {er}')
+                                print(f'ERROR while processing {user[1]}: {er}', file=log)
         endTime = datetime.now()
         endTime = endTime.strftime('%H:%M:%S')
         print(f'Execution ended at {endTime}')
