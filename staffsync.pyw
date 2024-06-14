@@ -20,6 +20,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 # setup db connection
 DB_UN = os.environ.get('POWERSCHOOL_READ_USER')  # username for read-only database user
@@ -275,9 +276,14 @@ if __name__ == '__main__':  # main file execution
                                             print(f'DBUG: {bodyDict}')  # debug
                                             # print(bodyDict, file=log) # debug
                                             outcome = service.users().update(userKey = userToUpdateEmail, body=bodyDict).execute()  # does the actual updating of the user profile
+                                        except HttpError as er:   # catch Google API http errors, get the specific message and reason from them for better logging
+                                            status = er.status_code
+                                            details = er.error_details[0]  # error_details returns a list with a dict inside of it, just strip it to the first dict
+                                            print(f'ERROR {status} from Google API on user account update for {email}: {details["message"]}. Reason: {details["reason"]}')
+                                            print(f'ERROR {status} from Google API on user account update for {email}: {details["message"]}. Reason: {details["reason"]}', file=log)
                                         except Exception as er:
-                                            print(f'ERROR: cannot update {user} : {er}')
-                                            print(f'ERROR: cannot update {user} : {er}', file=log)
+                                            print(f'ERROR: cannot update {email} : {er}')
+                                            print(f'ERROR: cannot update {email} : {er}', file=log)
 
                                 else:  # there is no result for our DCID query, should try to create a new email account
                                     print(f'INFO: User with DCID: {uDCID} does not exist, will need to create them with email: {email}')
@@ -296,6 +302,11 @@ if __name__ == '__main__':  # main file execution
                                                     'orgUnitPath' : targetOrgUnit, 'externalIds' : [{'value' : teacherNum, 'type' : 'organization'}],
                                                     'customSchemas' : {CUSTOM_ATTRIBUTE_SYNC_CATEGORY : {'DCID': int(uDCID)}}}
                                         outcome = service.users().insert(body=newUser).execute()  # does the actual account creation
+                                    except HttpError as er:   # catch Google API http errors, get the specific message and reason from them for better logging
+                                        status = er.status_code
+                                        details = er.error_details[0]  # error_details returns a list with a dict inside of it, just strip it to the first dict
+                                        print(f'ERROR {status} from Google API on user account creation for {email}: {details["message"]}. Reason: {details["reason"]}')
+                                        print(f'ERROR {status} from Google API on user account creation for {email}: {details["message"]}. Reason: {details["reason"]}', file=log)
                                     except Exception as er:
                                         print(f'ERROR on user account creation for {email}: {er}')
                                         print(f'ERROR on user account creation for {email}: {er}', file=log)
@@ -345,20 +356,19 @@ if __name__ == '__main__':  # main file execution
                                     print(f'WARN: Found inactive user DCID {uDCID} without Google account that matches. Should be {email}')
                                     print(f'WARN: Found inactive user DCID {uDCID} without Google account that matches. Should be {email}', file=log)
                         except BadNameExceptionError:
-                            print(f'INFO: Found user matching name in bad names list {email} - {firstName} {lastName}')
-                            print(f'INFO: Found user matching name in bad names list {email} - {firstName} {lastName}', file=log)
+                            print(f'WARN: Found user matching name in bad names list {email} - {firstName} {lastName}')
+                            print(f'WARN: Found user matching name in bad names list {email} - {firstName} {lastName}', file=log)
                         except NumericEmailExceptionError:
                             print(f'WARN: Found user with an all numeric email. DCID: {uDCID} - {firstName} {lastName} - {email}')
                             print(f'WARN: Found user with an all numeric email. DCID: {uDCID} - {firstName} {lastName} - {email}', file=log)
+                        except HttpError as er:   # catch Google API http errors, get the specific message and reason from them for better logging
+                            status = er.status_code
+                            details = er.error_details[0]  # error_details returns a list with a dict inside of it, just strip it to the first dict
+                            print(f'ERROR {status} from Google API while processing {user[1]}: {details["message"]}. Reason: {details["reason"]}')
+                            print(f'ERROR {status} from Google API while processing {user[1]}: {details["message"]}. Reason: {details["reason"]}', file=log)
                         except Exception as er:
-                            if "Details:" in er:  # if the error is coming from the Google API it will have specific info including the "Details" section
-                                er = er.split("Details: ")[1]  # split the error message by the http code and details
-                                er = er.strip("\"[]>")  # strip out the extra ", [], and > that will still be left over. Should result in a dict with a message, domain, and reason
-                                print(f'ERROR from Google API while processing {user[1]}: {er["message"]}, reason {er["reason"]}')
-                                print(f'ERROR from Google API while processing {user[1]}: {er["message"]}, reason {er["reason"]}', file=log)
-                            else:
-                                print(f'ERROR while processing {user[1]}: {er}')
-                                print(f'ERROR while processing {user[1]}: {er}', file=log)
+                            print(f'ERROR while processing {user[1]}: {er}')
+                            print(f'ERROR while processing {user[1]}: {er}', file=log)
         endTime = datetime.now()
         endTime = endTime.strftime('%H:%M:%S')
         print(f'Execution ended at {endTime}')
