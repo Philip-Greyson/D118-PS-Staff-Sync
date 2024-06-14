@@ -95,8 +95,8 @@ if __name__ == '__main__':  # main file execution
     with open('StaffLog.txt', 'w') as log:
         startTime = datetime.now()
         startTime = startTime.strftime('%H:%M:%S')
-        print(f'Execution started at {startTime}')
-        print(f'Execution started at {startTime}', file=log)
+        print(f'INFO: Execution started at {startTime}')
+        print(f'INFO: Execution started at {startTime}', file=log)
         with oracledb.connect(user=DB_UN, password=DB_PW, dsn=DB_CS) as con:  # create the connecton to the database
             with con.cursor() as cur:  # start an entry cursor
                 print(f'INFO: Connection established to PS database on version: {con.version}')
@@ -113,8 +113,8 @@ if __name__ == '__main__':  # main file execution
                     buildingOrgUnit = OU_PREFIX + schoolName + BUILDING_OU_SUFFIX
                     if schoolName == SUB_BUILDING_NAME:  # check and see if our building is the substitute building since they have a different OU then the rest of staff
                         buildingOrgUnit = SUBSTITUTE_OU
-                    print(f'Starting Building: {schoolName} | {schoolNum} | {buildingOrgUnit}')  # debug
-                    print(f'Starting Building: {schoolName} | {schoolNum} | {buildingOrgUnit}',file=log)  # debug
+                    print(f'DBUG: Starting Building: {schoolName} | {schoolNum} | {buildingOrgUnit}')  # debug
+                    print(f'DBUG: Starting Building: {schoolName} | {schoolNum} | {buildingOrgUnit}',file=log)  # debug
 
                     # get the overall user info (non-school specific) for all users in the current school, filtering to only those who have an email filled in to avoid "fake" accounts like test/temp staff
                     cur.execute('SELECT users.dcid, users.email_addr, users.first_name, users.last_name, users.teachernumber, users.groupvalue, users.canchangeschool, u_humanresources.cellphone\
@@ -276,6 +276,8 @@ if __name__ == '__main__':  # main file execution
                                             print(f'DBUG: {bodyDict}')  # debug
                                             # print(bodyDict, file=log) # debug
                                             outcome = service.users().update(userKey = userToUpdateEmail, body=bodyDict).execute()  # does the actual updating of the user profile
+
+                                        # error catching for new account creation
                                         except HttpError as er:   # catch Google API http errors, get the specific message and reason from them for better logging
                                             status = er.status_code
                                             details = er.error_details[0]  # error_details returns a list with a dict inside of it, just strip it to the first dict
@@ -302,6 +304,8 @@ if __name__ == '__main__':  # main file execution
                                                     'orgUnitPath' : targetOrgUnit, 'externalIds' : [{'value' : teacherNum, 'type' : 'organization'}],
                                                     'customSchemas' : {CUSTOM_ATTRIBUTE_SYNC_CATEGORY : {'DCID': int(uDCID)}}}
                                         outcome = service.users().insert(body=newUser).execute()  # does the actual account creation
+
+                                    # error catching for new account creation
                                     except HttpError as er:   # catch Google API http errors, get the specific message and reason from them for better logging
                                         status = er.status_code
                                         details = er.error_details[0]  # error_details returns a list with a dict inside of it, just strip it to the first dict
@@ -334,27 +338,51 @@ if __name__ == '__main__':  # main file execution
 
                                     # finally do the update (suspend and move) if we have anything in the bodyDict
                                     if bodyDict:
-                                        print(bodyDict)
-                                        # print(bodyDict, file=log)
-                                        outcome = service.users().update(userKey = userToUpdateEmail, body=bodyDict).execute()  # does the actual updating of the user profile
+                                        try:
+                                            print(bodyDict)
+                                            # print(bodyDict, file=log)
+                                            outcome = service.users().update(userKey = userToUpdateEmail, body=bodyDict).execute()  # does the actual updating of the user profile
+                                        # error catching for suspending and move user process
+                                        except HttpError as er:   # catch Google API http errors, get the specific message and reason from them for better logging
+                                            status = er.status_code
+                                            details = er.error_details[0]  # error_details returns a list with a dict inside of it, just strip it to the first dict
+                                            print(f'ERROR {status} from Google API while suspending and moving {email} to suspended OU: {details["message"]}. Reason: {details["reason"]}')
+                                            print(f'ERROR {status} from Google API while suspending and moving {email} to suspended OU: {details["message"]}. Reason: {details["reason"]}', file=log)
+                                        except Exception as er:
+                                            print(f'ERROR while processing {email}: {er}')
+                                            print(f'ERROR while processing {email}: {er}', file=log)
 
                                         if REMOVE_SUSPENDED_FROM_GROUPS:  # Remove the newly suspended user from any groups they were a member of
                                             userGroups = service.groups().list(userKey=userToUpdateEmail).execute().get('groups')
                                             if userGroups:
                                                 for group in userGroups:
-                                                    name = group.get('name')
-                                                    groupEmail = group.get('email')
-                                                    print(f'INFO: {email} was a member of: {name} - {groupEmail}, they will be removed from the group')
-                                                    print(f'INFO: {email} was a member of: {name} - {groupEmail}, they will be removed from the group',file=log)
-                                                    service.members().delete(groupKey=groupEmail, memberKey=email).execute()
+                                                    try:
+                                                        name = group.get('name')
+                                                        groupEmail = group.get('email')
+                                                        print(f'INFO: {email} was a member of: {name} - {groupEmail}, they will be removed from the group')
+                                                        print(f'INFO: {email} was a member of: {name} - {groupEmail}, they will be removed from the group',file=log)
+                                                        service.members().delete(groupKey=groupEmail, memberKey=email).execute()
+                                                    # error catching for removal from group
+                                                    except HttpError as er:   # catch Google API http errors, get the specific message and reason from them for better logging
+                                                        status = er.status_code
+                                                        details = er.error_details[0]  # error_details returns a list with a dict inside of it, just strip it to the first dict
+                                                        print(f'ERROR {status} from Google API while removing suspended user {email} from group {groupEmail}: {details["message"]}. Reason: {details["reason"]}')
+                                                        print(f'ERROR {status} from Google API while removing suspended user {email} from group {groupEmail}: {details["message"]}. Reason: {details["reason"]}', file=log)
+                                                    except Exception as er:
+                                                        print(f'ERROR while processing {email}: {er}')
+                                                        print(f'ERROR while processing {email}: {er}', file=log)
                                             else:
                                                 print(f'DBUG: Newly suspended account {email} was not in any groups, no removal needed')
                                                 print(f'DBUG: Newly suspended account {email} was not in any groups, no removal needed', file=log)
-                                    else:
+                                    else:  # if there is nothing in the body dict (update call) it means they are already suspended and in the right OU
                                         print(f'DBUG: {email} is already suspended and in the suspended accounts OU, no update needed')
+                                # if we dont find a user in Google that matches the DCID, but they are supposed to be suspended/inactive, we dont really care so just print a warning
                                 else:
                                     print(f'WARN: Found inactive user DCID {uDCID} without Google account that matches. Should be {email}')
                                     print(f'WARN: Found inactive user DCID {uDCID} without Google account that matches. Should be {email}', file=log)
+
+
+                        # error catching for overall program not caught by other specific catches
                         except BadNameExceptionError:
                             print(f'WARN: Found user matching name in bad names list {email} - {firstName} {lastName}')
                             print(f'WARN: Found user matching name in bad names list {email} - {firstName} {lastName}', file=log)
@@ -371,5 +399,5 @@ if __name__ == '__main__':  # main file execution
                             print(f'ERROR while processing {user[1]}: {er}', file=log)
         endTime = datetime.now()
         endTime = endTime.strftime('%H:%M:%S')
-        print(f'Execution ended at {endTime}')
-        print(f'Execution ended at {endTime}', file=log)
+        print(f'INFO: Execution ended at {endTime}')
+        print(f'INFO: Execution ended at {endTime}', file=log)
