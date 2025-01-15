@@ -36,6 +36,7 @@ SUSPENDED_OU = '/Suspended Accounts'  # the string location of where suspended a
 SUBSTITUTE_OU = '/Substitute Teachers'  # string location of where where substitute accounts should end up
 SUB_BUILDING_NAME = 'Substitute'  # name of the substitute building in PowerSchool
 FROZEN_OUS = ['/Administrators', '/Mail Merge Users', '/Parallels Desktop Users', '/Utility Accounts']  # Define a list of sub-OUs in GAdmin where users should not be moved out of. Used for special permissions, apps, licenses, etc
+TEMPORARY_REACTIVATION_OUS = ['/Temporary Re-Activations']  # list of OUs that will not have their users suspended or moved. Used for when we need to temporarily re-activate a Google account to transfer things to new owners
 BAD_NAMES = ['use', 'training1','trianing2','trianing3','trianing4','planning','admin','nurse','user','use ','test','testtt','do not','do','not','tbd','lunch','new','teacher','new teacher','teacher-1','sub','substitute','plugin','mba','tech','technology','administrator']  # List of names that some of the dummy/old accounts use so we can ignore them
 
 REMOVE_SUSPENDED_FROM_GROUPS = True  # boolean flag to control whether newly suspended accounts should be removed from all email groups when they get suspended
@@ -323,18 +324,32 @@ if __name__ == '__main__':  # main file execution
                                 userToUpdate = service.users().list(customer='my_customer', domain=GOOGLE_DOMAIN, maxResults=2, orderBy='email', projection='full', query=queryString).execute()  # return a list of at most 2 users who have that DCID
                                 # print(queryResults) # debug
                                 if userToUpdate.get('users'):  # if we found a user in Google that matches the user DCID, we can suspend their account and move them to the suspended OU
+                                    temporaryReactivation = False  # flag that determines whether the suspended account is in the temporary reactivation OU
                                     bodyDict = {}  # empty dict that will hold the update parameters
                                     userToUpdateEmail = userToUpdate.get('users')[0].get('primaryEmail')  # get the primary email from the google account results just in case its different than what is in PS
                                     # print(userToUpdateEmail) # debug
                                     # print(userToUpdate) # debug
+                                    # determine whether the user is in a temporary reactivation OU
+                                    for org in TEMPORARY_REACTIVATION_OUS:
+                                        if org in userToUpdate.get('users')[0].get('orgUnitPath'):
+                                            temporaryReactivation = True
+
                                     if userToUpdate.get('users')[0].get('suspended') != True:  # check to see if they have been previously suspended, if not we need to do it
-                                        print(f'INFO: Suspending DCID {uDCID} with {email}')
-                                        print(f'INFO: Suspending DCID {uDCID} with {email}', file=log)
-                                        bodyDict.update({'suspended' : True})  # add the suspended: True to the body of the update patch
+                                        if temporaryReactivation:
+                                            print(f'INFO: User with DCID {uDCID} and email {email} should be suspended, but is in a temporary re-activation OU so will NOT be suspended')
+                                            print(f'INFO: User with DCID {uDCID} and email {email} should be suspended, but is in a temporary re-activation OU so will NOT be suspended', file=log)
+                                        else:
+                                            print(f'INFO: Suspending DCID {uDCID} with {email}')
+                                            print(f'INFO: Suspending DCID {uDCID} with {email}', file=log)
+                                            bodyDict.update({'suspended' : True})  # add the suspended: True to the body of the update patch
                                     if userToUpdate.get('users')[0].get('orgUnitPath') != SUSPENDED_OU:  # check to see if they are in the proper OU for suspended users
-                                        print(f'INFO: Moving DCID {uDCID} with {email} to suspended OU {SUSPENDED_OU}')
-                                        print(f'INFO: Moving DCID {uDCID} with {email} to suspended OU {SUSPENDED_OU}', file=log)
-                                        bodyDict.update({'orgUnitPath' : SUSPENDED_OU})  # add the suspended OU to the org unit path for the update patch
+                                        if temporaryReactivation:
+                                            print(f'INFO: User with DCID {uDCID} and email {email} should be in the suspended users OU, but is in a temporary re-activation OU so will NOT be moved')
+                                            print(f'INFO: User with DCID {uDCID} and email {email} should be in the suspended users OU, but is in a temporary re-activation OU so will NOT be moved', file=log)
+                                        else:
+                                            print(f'INFO: Moving DCID {uDCID} with {email} to suspended OU {SUSPENDED_OU}')
+                                            print(f'INFO: Moving DCID {uDCID} with {email} to suspended OU {SUSPENDED_OU}', file=log)
+                                            bodyDict.update({'orgUnitPath' : SUSPENDED_OU})  # add the suspended OU to the org unit path for the update patch
 
                                     # finally do the update (suspend and move) if we have anything in the bodyDict
                                     if bodyDict:
