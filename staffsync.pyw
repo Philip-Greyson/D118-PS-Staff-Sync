@@ -37,7 +37,7 @@ SUBSTITUTE_OU = '/Substitute Teachers'  # string location of where where substit
 SUB_BUILDING_NAME = 'Substitute'  # name of the substitute building in PowerSchool
 FROZEN_OUS = ['/Administrators', '/Mail Merge Users', '/Parallels Desktop Users', '/Utility Accounts']  # Define a list of sub-OUs in GAdmin where users should not be moved out of. Used for special permissions, apps, licenses, etc
 TEMPORARY_REACTIVATION_OUS = ['/Temporary Re-Activations']  # list of OUs that will not have their users suspended or moved. Used for when we need to temporarily re-activate a Google account to transfer things to new owners
-BAD_NAMES = ['use', 'training1','trianing2','trianing3','trianing4','planning','admin','nurse','user','use ','test','testtt','do not','do','not','tbd','lunch','teacher','new teacher','teacher-1','sub','substitute','plugin','mba','tech','technology','administrator']  # List of names that some of the dummy/old accounts use so we can ignore them
+BAD_NAMES = ['use', 'training1','trianing2','trianing3','trianing4','planning','admin','nurse','user','use ','test','testtt','do not','do','not','tbd','lunch','teacher','new teacher','teacher-1','sub','substitute','plugin','mba','tech','technology','administrator','whs','commons','attendance']  # List of names that some of the dummy/old accounts use so we can ignore them
 
 REMOVE_SUSPENDED_FROM_GROUPS = True  # boolean flag to control whether newly suspended accounts should be removed from all email groups when they get suspended
 SKIP_NUMERIC_EMAILS = True  # boolean flag to control whether all numeric emails should be skipped
